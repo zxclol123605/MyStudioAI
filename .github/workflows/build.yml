@@ -1,0 +1,87 @@
+name: Build APK
+on: [push, workflow_dispatch]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup Java
+      uses: actions/setup-java@v3
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v2
+
+    - name: Create Project Files
+      run: |
+        mkdir -p app/src/main/java/com/example/mystudio
+        echo 'include ":app"' > settings.gradle
+        echo 'plugins { id "com.android.application" version "8.2.0" apply false }' > build.gradle
+        echo 'android { namespace "com.example.mystudio"; compileSdk 34; defaultConfig { applicationId "com.example.mystudio"; minSdk 24; targetSdk 34; versionCode 1; versionName "1.0" }; buildFeatures { compose true }; composeOptions { kotlinCompilerExtensionVersion "1.5.1" } } dependencies { implementation "androidx.core:core-ktx:1.12.0"; implementation "androidx.lifecycle:lifecycle-runtime-ktx:2.7.0"; implementation "androidx.activity:activity-compose:1.8.2"; implementation "androidx.compose.ui:ui:1.5.4"; implementation "androidx.compose.material3:material3:1.2.0" }' > app/build.gradle
+        
+        cat << 'EOF' > app/src/main/AndroidManifest.xml
+        <?xml version="1.0" encoding="utf-8"?>
+        <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+            <application android:label="My Studio" android:theme="@android:style/Theme.Material.Light.NoActionBar">
+                <activity android:name=".MainActivity" android:exported="true">
+                    <intent-filter>
+                        <action android:name="android.intent.action.MAIN" />
+                        <category android:name="android.intent.category.LAUNCHER" />
+                    </intent-filter>
+                </activity>
+            </application>
+        </manifest>
+        EOF
+
+        cat << 'EOF' > app/src/main/java/com/example/mystudio/MainActivity.kt
+        package com.example.mystudio
+
+        import android.os.Bundle
+        import androidx.activity.ComponentActivity
+        import androidx.activity.compose.setContent
+        import androidx.compose.foundation.layout.*
+        import androidx.compose.material3.*
+        import androidx.compose.runtime.*
+        import androidx.compose.ui.Modifier
+
+        class MainActivity : ComponentActivity() {
+            override fun onCreate(savedInstanceState: Bundle?) {
+                super.onCreate(savedInstanceState)
+                setContent {
+                    MaterialTheme {
+                        var selectedTab by remember { mutableIntStateOf(0) }
+                        val tabs = listOf("Код", "Фото", "Видео")
+
+                        Column(Modifier.fillMaxSize()) {
+                            TabRow(selectedTabIndex = selectedTab) {
+                                tabs.forEachIndexed { index, title ->
+                                    Tab(
+                                        selected = selectedTab == index,
+                                        onClick = { selectedTab = index },
+                                        text = { Text(title) }
+                                    )
+                                }
+                            }
+                            when (selectedTab) {
+                                0 -> Text("Здесь будет ИИ для кода", modifier = Modifier.padding(16.dp))
+                                1 -> Text("Здесь будет ИИ для фото", modifier = Modifier.padding(16.dp))
+                                2 -> Text("Здесь будет ИИ для видео", modifier = Modifier.padding(16.dp))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        EOF
+
+    - name: Build APK
+      run: gradle assembleDebug
+
+    - name: Upload APK
+      uses: actions/upload-artifact@v3
+      with:
+          name: MyStudio-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
